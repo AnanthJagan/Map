@@ -25,9 +25,6 @@
         button:hover {
             background-color: #0056b3;
         }
-        .selected {
-            border: 2px solid yellow;
-        }
     </style>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQb_eJg_JyoCCyiGhHsymqTwGfFFSI6nc
 &libraries=drawing,geometry"></script>
@@ -87,11 +84,14 @@
                         center: userLocation,
                         radius: radius,
                         fillColor: shadeOption === 'inside' ? "red" : "transparent",
-                        fillOpacity: 0.35,
+                        fillOpacity: shadeOption === 'inside' ? 0.35 : 0,
                         strokeWeight: 1,
                         editable: true,
                         draggable: true,
                     });
+                    if (shadeOption === 'outside') {
+                        shadeOutsideShape(circle);
+                    }
                     shapes.push(circle);
                     attachShapeEvents(circle, 'circle');
                 });
@@ -104,8 +104,11 @@
                 google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
                     rectangle.setOptions({
                         fillColor: shadeOption === 'inside' ? "red" : "transparent",
-                        fillOpacity: 0.35,
+                        fillOpacity: shadeOption === 'inside' ? 0.35 : 0,
                     });
+                    if (shadeOption === 'outside') {
+                        shadeOutsideShape(rectangle);
+                    }
                     shapes.push(rectangle);
                     attachShapeEvents(rectangle, 'rectangle');
                     drawingManager.setDrawingMode(null);
@@ -173,6 +176,55 @@
             });
         }
 
+        function shadeOutsideShape(shape) {
+            const bounds = map.getBounds();
+            const globalCoords = [
+                { lat: bounds.getNorthEast().lat(), lng: bounds.getSouthWest().lng() },
+                { lat: bounds.getNorthEast().lat(), lng: bounds.getNorthEast().lng() },
+                { lat: bounds.getSouthWest().lat(), lng: bounds.getNorthEast().lng() },
+                { lat: bounds.getSouthWest().lat(), lng: bounds.getSouthWest().lng() },
+            ];
+
+            const shapeCoords = shape instanceof google.maps.Circle
+                ? getCirclePolygonCoords(shape)
+                : getRectanglePolygonCoords(shape);
+
+            const outerPolygon = new google.maps.Polygon({
+                paths: [globalCoords, shapeCoords],
+                strokeColor: "#FF0000",
+                strokeOpacity: 0,
+                strokeWeight: 0,
+                fillColor: "red",
+                fillOpacity: 0.35,
+                map: map,
+            });
+
+            shapes.push(outerPolygon);
+        }
+
+        function getCirclePolygonCoords(circle) {
+            const center = circle.getCenter();
+            const radius = circle.getRadius();
+            const coords = [];
+            for (let i = 0; i <= 360; i++) {
+                const angle = (i * Math.PI) / 180;
+                const lat = center.lat() + (radius / 111320) * Math.cos(angle);
+                const lng = center.lng() + (radius / (111320 * Math.cos(center.lat()))) * Math.sin(angle);
+                coords.push({ lat, lng });
+            }
+            return coords;
+        }
+
+        function getRectanglePolygonCoords(rectangle) {
+            const bounds = rectangle.getBounds();
+            return [
+                { lat: bounds.getNorthEast().lat(), lng: bounds.getSouthWest().lng() },
+                { lat: bounds.getNorthEast().lat(), lng: bounds.getNorthEast().lng() },
+                { lat: bounds.getSouthWest().lat(), lng: bounds.getNorthEast().lng() },
+                { lat: bounds.getSouthWest().lat(), lng: bounds.getSouthWest().lng() },
+            ];
+        }
+
         function getDirectionalBounds(center, direction) {
             const delta = 0.1;
             let bounds = null;
@@ -187,41 +239,4 @@
                     bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng + delta, west: center.lng };
                     break;
                 case 'W':
-                    bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng, west: center.lng - delta };
-                    break;
-            }
-            return bounds;
-        }
-
-        function attachShapeEvents(shape, type) {
-            shape.addListener("bounds_changed", () => {
-                // Update shading dynamically if needed
-            });
-        }
-
-        function highlightShape(shape) {
-            if (shape instanceof google.maps.Circle || shape instanceof google.maps.Rectangle) {
-                shape.setOptions({ strokeWeight: 3, strokeColor: "yellow" });
-            }
-        }
-
-        function resetShapeAppearance(shape) {
-            if (shape instanceof google.maps.Circle || shape instanceof google.maps.Rectangle) {
-                shape.setOptions({ strokeWeight: 1, strokeColor: "#000" });
-            }
-        }
-
-        function clearAllShapes() {
-            for (let shape of shapes) {
-                shape.setMap(null);
-            }
-            shapes = [];
-            selectedShape = null;
-        }
-
-        // Initialize the Map
-        window.onload = initMap;
-    </script>
-</body>
-</html>
-
+                    bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng, west: center.lng
