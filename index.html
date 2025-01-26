@@ -3,222 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Map Game</title>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQb_eJg_JyoCCyiGhHsymqTwGfFFSI6nc"></script>
+    <title>Interactive Map with Freehand Shapes</title>
     <style>
         #map {
             height: 90vh;
             width: 100%;
         }
-        #controls {
+        .toolbar {
             display: flex;
-            flex-wrap: wrap;
             gap: 10px;
             margin: 10px;
         }
         button {
             padding: 10px;
-            background-color: #007BFF;
-            color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            background-color: #007bff;
+            color: white;
         }
         button:hover {
             background-color: #0056b3;
         }
     </style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQb_eJg_JyoCCyiGhHsymqTwGfFFSI6nc
+&libraries=drawing"></script>
 </head>
 <body>
-    <div id="controls">
-        <button id="drawCircleLocation">Draw Circle Around My Location</button>
-        <button id="drawRectangleLocation">Draw Rectangle Around My Location</button>
-        <button id="shadeWestLocation">Shade West of My Location</button>
-        <button id="shadeCardinal">Shade a Cardinal Direction</button>
-        <button id="clearMap">Clear Map</button>
+    <div class="toolbar">
+        <button id="drawCircle">Draw Circle</button>
+        <button id="drawRectangle">Draw Rectangle</button>
+        <button id="clearShapes">Clear All Shapes</button>
     </div>
     <div id="map"></div>
 
     <script>
-        let map;
-        let shapes = [];
+        let map, drawingManager, shapes = [], shadeOption = 'outside';
 
         function initMap() {
             map = new google.maps.Map(document.getElementById("map"), {
-                center: { lat: 37.7749, lng: -122.4194 }, // Default: San Francisco
-                zoom: 10,
+                center: { lat: 37.7749, lng: -122.4194 },
+                zoom: 12,
             });
-            loadShapesFromLocalStorage();
+
+            // Add drawing tools for freehand drawing
+            drawingManager = new google.maps.drawing.DrawingManager({
+                drawingControl: false,
+                rectangleOptions: {
+                    fillColor: "#FF0000",
+                    fillOpacity: 0.35,
+                    strokeWeight: 1,
+                    clickable: true,
+                    editable: true,
+                    draggable: true,
+                },
+                circleOptions: {
+                    fillColor: "#FF0000",
+                    fillOpacity: 0.35,
+                    strokeWeight: 1,
+                    clickable: true,
+                    editable: true,
+                },
+            });
+            drawingManager.setMap(map);
+
+            // Event listeners for buttons
+            document.getElementById("drawCircle").addEventListener("click", () => {
+                const radius = parseFloat(prompt("Enter the circle radius in meters:"));
+                if (isNaN(radius) || radius <= 0) {
+                    alert("Please enter a valid radius!");
+                    return;
+                }
+                drawingManager.setDrawingMode(google.maps.drawing.OverlayType.CIRCLE);
+
+                google.maps.event.addListener(drawingManager, 'circlecomplete', function (circle) {
+                    shapes.push(circle);
+                    shadeArea(circle, 'circle', radius);
+                    drawingManager.setDrawingMode(null);
+                });
+            });
+
+            document.getElementById("drawRectangle").addEventListener("click", () => {
+                drawingManager.setDrawingMode(google.maps.drawing.OverlayType.RECTANGLE);
+
+                google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
+                    shapes.push(rectangle);
+                    shadeArea(rectangle, 'rectangle');
+                    drawingManager.setDrawingMode(null);
+                });
+            });
+
+            document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
         }
 
-        function getUserLocation(callback) {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const userLocation = {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude,
-                        };
-                        callback(userLocation);
-                    },
-                    () => alert("Unable to retrieve your location.")
-                );
-            } else {
-                alert("Geolocation is not supported by your browser.");
+        function shadeArea(shape, type, radius = null) {
+            const bounds = shape.getBounds();
+            const center = shape.getCenter ? shape.getCenter() : null;
+
+            const fillColor = shadeOption === 'inside' ? "#00FF00" : "#000000";
+
+            if (type === 'circle') {
+                const circle = new google.maps.Circle({
+                    map: map,
+                    center: center,
+                    radius: radius,
+                    fillColor: fillColor,
+                    fillOpacity: 0.35,
+                    strokeWeight: 0,
+                });
+                shapes.push(circle);
+            } else if (type === 'rectangle') {
+                const rectangle = new google.maps.Rectangle({
+                    map: map,
+                    bounds: bounds,
+                    fillColor: fillColor,
+                    fillOpacity: 0.35,
+                    strokeWeight: 0,
+                });
+                shapes.push(rectangle);
             }
         }
 
-        function drawCircle(center, radius = 1000) {
-            const circle = new google.maps.Circle({
-                center,
-                radius,
-                map,
-                strokeColor: "#FF0000",
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-                fillColor: "#FF0000",
-                fillOpacity: 0.35,
-            });
-            shapes.push(circle);
-            saveShapesToLocalStorage();
-        }
-
-        function drawRectangle(bounds) {
-            const rectangle = new google.maps.Rectangle({
-                bounds,
-                map,
-                strokeColor: "#00FF00",
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-                fillColor: "#00FF00",
-                fillOpacity: 0.35,
-            });
-            shapes.push(rectangle);
-            saveShapesToLocalStorage();
-        }
-
-        function shadeWest(center) {
-            const bounds = {
-                north: 85,
-                south: -85,
-                east: center.lng,
-                west: -180,
-            };
-            drawRectangle(bounds);
-        }
-
-        function shadeCardinal(center, direction) {
-            let bounds;
-            switch (direction) {
-                case "north":
-                    bounds = {
-                        north: 85,
-                        south: center.lat,
-                        east: 180,
-                        west: -180,
-                    };
-                    break;
-                case "south":
-                    bounds = {
-                        north: center.lat,
-                        south: -85,
-                        east: 180,
-                        west: -180,
-                    };
-                    break;
-                case "east":
-                    bounds = {
-                        north: 85,
-                        south: -85,
-                        east: 180,
-                        west: center.lng,
-                    };
-                    break;
-                case "west":
-                    bounds = {
-                        north: 85,
-                        south: -85,
-                        east: center.lng,
-                        west: -180,
-                    };
-                    break;
+        function clearAllShapes() {
+            for (let shape of shapes) {
+                shape.setMap(null);
             }
-            drawRectangle(bounds);
-        }
-
-        function saveShapesToLocalStorage() {
-            const shapesData = shapes.map((shape) => {
-                if (shape instanceof google.maps.Circle) {
-                    return {
-                        type: "circle",
-                        center: shape.getCenter().toJSON(),
-                        radius: shape.getRadius(),
-                    };
-                } else if (shape instanceof google.maps.Rectangle) {
-                    return {
-                        type: "rectangle",
-                        bounds: shape.getBounds().toJSON(),
-                    };
-                }
-            });
-            localStorage.setItem("shapes", JSON.stringify(shapesData));
-        }
-
-        function loadShapesFromLocalStorage() {
-            const shapesData = JSON.parse(localStorage.getItem("shapes")) || [];
-            shapesData.forEach((data) => {
-                if (data.type === "circle") {
-                    drawCircle(data.center, data.radius);
-                } else if (data.type === "rectangle") {
-                    drawRectangle(data.bounds);
-                }
-            });
-        }
-
-        function clearMap() {
-            shapes.forEach((shape) => shape.setMap(null));
             shapes = [];
-            localStorage.removeItem("shapes");
         }
 
-        document.getElementById("drawCircleLocation").addEventListener("click", () => {
-            getUserLocation((location) => {
-                drawCircle(location, 2000);
-                map.setCenter(location);
-            });
-        });
-
-        document.getElementById("drawRectangleLocation").addEventListener("click", () => {
-            getUserLocation((location) => {
-                const bounds = {
-                    north: location.lat + 0.01,
-                    south: location.lat - 0.01,
-                    east: location.lng + 0.01,
-                    west: location.lng - 0.01,
-                };
-                drawRectangle(bounds);
-                map.setCenter(location);
-            });
-        });
-
-        document.getElementById("shadeWestLocation").addEventListener("click", () => {
-            getUserLocation((location) => {
-                shadeWest(location);
-                map.setCenter(location);
-            });
-        });
-
-        document.getElementById("shadeCardinal").addEventListener("click", () => {
-            const direction = prompt("Enter direction to shade (north, south, east, west):");
-            getUserLocation((location) => {
-                shadeCardinal(location, direction);
-                map.setCenter(location);
-            });
-        });
-
-        document.getElementById("clearMap").addEventListener("click", clearMap);
-
+        // Load the map
         window.onload = initMap;
     </script>
 </body>
 </html>
+
