@@ -25,6 +25,9 @@
         button:hover {
             background-color: #0056b3;
         }
+        .selected {
+            border: 2px solid yellow;
+        }
     </style>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQb_eJg_JyoCCyiGhHsymqTwGfFFSI6nc
 &libraries=drawing,geometry"></script>
@@ -34,14 +37,15 @@
         <button id="drawCircle">Draw Circle</button>
         <button id="drawRectangle">Draw Rectangle</button>
         <button id="shadeDirection">Shade Cardinal Direction</button>
-        <button id="toggleShading">Toggle Shading: Outside</button>
+        <button id="selectShape">Select Shape</button>
         <button id="deleteSelectedShape">Delete Selected Shape</button>
         <button id="clearShapes">Clear All Shapes</button>
+        <button id="toggleShading">Toggle Shading: Outside</button>
     </div>
     <div id="map"></div>
 
     <script>
-        let map, drawingManager, shapes = [], shadeOption = 'outside', selectedShape = null;
+        let map, drawingManager, shapes = [], selectedShape = null, shadeOption = 'outside';
 
         function initMap() {
             map = new google.maps.Map(document.getElementById("map"), {
@@ -54,15 +58,14 @@
                 rectangleOptions: {
                     fillColor: "transparent",
                     strokeWeight: 1,
-                    clickable: true,
                     editable: true,
                     draggable: true,
                 },
                 circleOptions: {
                     fillColor: "transparent",
                     strokeWeight: 1,
-                    clickable: true,
                     editable: true,
+                    draggable: true,
                 },
             });
             drawingManager.setMap(map);
@@ -83,13 +86,14 @@
                         map: map,
                         center: userLocation,
                         radius: radius,
-                        fillColor: "transparent",
+                        fillColor: shadeOption === 'inside' ? "red" : "transparent",
+                        fillOpacity: 0.35,
                         strokeWeight: 1,
                         editable: true,
                         draggable: true,
                     });
                     shapes.push(circle);
-                    attachShading(circle, 'circle');
+                    attachShapeEvents(circle, 'circle');
                 });
             });
 
@@ -98,8 +102,12 @@
                 drawingManager.setDrawingMode(google.maps.drawing.OverlayType.RECTANGLE);
 
                 google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
+                    rectangle.setOptions({
+                        fillColor: shadeOption === 'inside' ? "red" : "transparent",
+                        fillOpacity: 0.35,
+                    });
                     shapes.push(rectangle);
-                    attachShading(rectangle, 'rectangle');
+                    attachShapeEvents(rectangle, 'rectangle');
                     drawingManager.setDrawingMode(null);
                 });
             });
@@ -125,13 +133,23 @@
                         strokeWeight: 0,
                     });
                     shapes.push(rectangle);
+                    attachShapeEvents(rectangle, 'rectangle');
                 });
             });
 
-            // Toggle Shading (Inside/Outside)
-            document.getElementById("toggleShading").addEventListener("click", (e) => {
-                shadeOption = shadeOption === 'outside' ? 'inside' : 'outside';
-                e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
+            // Select Shape
+            document.getElementById("selectShape").addEventListener("click", () => {
+                alert("Click on a shape to select it for deletion.");
+                shapes.forEach((shape) => {
+                    google.maps.event.addListener(shape, "click", function () {
+                        if (selectedShape) {
+                            resetShapeAppearance(selectedShape);
+                        }
+                        selectedShape = shape;
+                        highlightShape(shape);
+                        alert("Shape selected.");
+                    });
+                });
             });
 
             // Delete Selected Shape
@@ -141,86 +159,55 @@
                     shapes = shapes.filter((shape) => shape !== selectedShape);
                     selectedShape = null;
                 } else {
-                    alert("Please select a shape to delete.");
+                    alert("No shape selected. Please use 'Select Shape' first.");
                 }
             });
 
             // Clear All Shapes
             document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
 
-            // Shape Selection for Deletion
-            shapes.forEach((shape) => {
-                google.maps.event.addListener(shape, "click", function () {
-                    if (selectedShape) {
-                        // Reset previously selected shape
-                        setShapeStroke(selectedShape, 1);
-                    }
-                    selectedShape = shape;
-                    setShapeStroke(selectedShape, 3); // Highlight the selected shape
-                    alert("Shape selected. Press 'Delete Selected Shape' to remove it.");
-                });
+            // Toggle Shading (Inside/Outside)
+            document.getElementById("toggleShading").addEventListener("click", (e) => {
+                shadeOption = shadeOption === 'outside' ? 'inside' : 'outside';
+                e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
             });
         }
 
         function getDirectionalBounds(center, direction) {
-            const delta = 0.1; // Adjust this for larger/smaller areas
+            const delta = 0.1;
             let bounds = null;
             switch (direction) {
                 case 'N':
-                    bounds = {
-                        north: center.lat + delta,
-                        south: center.lat,
-                        east: center.lng + delta,
-                        west: center.lng - delta,
-                    };
+                    bounds = { north: center.lat + delta, south: center.lat, east: center.lng + delta, west: center.lng - delta };
                     break;
                 case 'S':
-                    bounds = {
-                        north: center.lat,
-                        south: center.lat - delta,
-                        east: center.lng + delta,
-                        west: center.lng - delta,
-                    };
+                    bounds = { north: center.lat, south: center.lat - delta, east: center.lng + delta, west: center.lng - delta };
                     break;
                 case 'E':
-                    bounds = {
-                        north: center.lat + delta,
-                        south: center.lat - delta,
-                        east: center.lng + delta,
-                        west: center.lng,
-                    };
+                    bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng + delta, west: center.lng };
                     break;
                 case 'W':
-                    bounds = {
-                        north: center.lat + delta,
-                        south: center.lat - delta,
-                        east: center.lng,
-                        west: center.lng - delta,
-                    };
+                    bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng, west: center.lng - delta };
                     break;
             }
             return bounds;
         }
 
-        function attachShading(shape, type) {
-            const shadingLayer = new google.maps.Polygon({
-                map: map,
-                paths: getShadingPaths(shape, type),
-                fillColor: "red",
-                fillOpacity: 0.35,
-                strokeWeight: 0,
-            });
-
+        function attachShapeEvents(shape, type) {
             shape.addListener("bounds_changed", () => {
-                shadingLayer.setPaths(getShadingPaths(shape, type));
+                // Update shading dynamically if needed
             });
-
-            shapes.push(shadingLayer);
         }
 
-        function setShapeStroke(shape, weight) {
-            if (shape instanceof google.maps.Rectangle || shape instanceof google.maps.Circle) {
-                shape.setOptions({ strokeWeight: weight });
+        function highlightShape(shape) {
+            if (shape instanceof google.maps.Circle || shape instanceof google.maps.Rectangle) {
+                shape.setOptions({ strokeWeight: 3, strokeColor: "yellow" });
+            }
+        }
+
+        function resetShapeAppearance(shape) {
+            if (shape instanceof google.maps.Circle || shape instanceof google.maps.Rectangle) {
+                shape.setOptions({ strokeWeight: 1, strokeColor: "#000" });
             }
         }
 
