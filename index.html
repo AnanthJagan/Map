@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Map with Enhanced Features</title>
+    <title>Interactive Map with Dynamic Shading</title>
     <style>
         #map {
             height: 90vh;
@@ -51,16 +51,14 @@
             drawingManager = new google.maps.drawing.DrawingManager({
                 drawingControl: false,
                 rectangleOptions: {
-                    fillColor: "#FF0000",
-                    fillOpacity: 0.35,
+                    fillColor: "transparent",
                     strokeWeight: 1,
                     clickable: true,
                     editable: true,
                     draggable: true,
                 },
                 circleOptions: {
-                    fillColor: "#FF0000",
-                    fillOpacity: 0.35,
+                    fillColor: "transparent",
                     strokeWeight: 1,
                     clickable: true,
                     editable: true,
@@ -84,14 +82,13 @@
                         map: map,
                         center: userLocation,
                         radius: radius,
-                        fillColor: "#FF0000",
-                        fillOpacity: 0.35,
+                        fillColor: "transparent",
                         strokeWeight: 1,
                         editable: true,
                         draggable: true,
                     });
                     shapes.push(circle);
-                    shadeArea(circle, 'circle', radius);
+                    attachShading(circle, 'circle', radius);
                 });
             });
 
@@ -101,7 +98,7 @@
 
                 google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
                     shapes.push(rectangle);
-                    shadeArea(rectangle, 'rectangle');
+                    attachShading(rectangle, 'rectangle');
                     drawingManager.setDrawingMode(null);
                 });
             });
@@ -122,11 +119,9 @@
                     const rectangle = new google.maps.Rectangle({
                         map: map,
                         bounds: bounds,
-                        fillColor: "#000000",
+                        fillColor: "red",
                         fillOpacity: 0.35,
                         strokeWeight: 0,
-                        editable: false,
-                        draggable: false,
                     });
                     shapes.push(rectangle);
                 });
@@ -141,8 +136,8 @@
             // Clear All Shapes
             document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
 
-            // Add right-click functionality to delete specific shapes
-            map.addListener("rightclick", (event) => {
+            // Add functionality to delete a specific shape on click
+            map.addListener("click", (event) => {
                 const clickedPosition = event.latLng;
                 shapes = shapes.filter((shape) => {
                     const containsPoint = shape.getBounds && shape.getBounds().contains(clickedPosition);
@@ -195,32 +190,27 @@
             return bounds;
         }
 
-        function shadeArea(shape, type, radius = null) {
-            const bounds = shape.getBounds();
-            const center = shape.getCenter ? shape.getCenter() : null;
+        function attachShading(shape, type, radius = null) {
+            const shadingLayer = new google.maps.Rectangle({
+                map: map,
+                bounds: shape.getBounds(),
+                fillColor: "red",
+                fillOpacity: 0.35,
+                strokeWeight: 0,
+            });
 
-            const fillColor = shadeOption === 'inside' ? "#00FF00" : "#000000";
+            // Dynamically update shading as the shape moves or is resized
+            shape.addListener("bounds_changed", () => {
+                shadingLayer.setBounds(shape.getBounds());
+            });
 
-            if (type === 'circle') {
-                const shadedCircle = new google.maps.Circle({
-                    map: map,
-                    center: center,
-                    radius: radius,
-                    fillColor: fillColor,
-                    fillOpacity: 0.35,
-                    strokeWeight: 0,
-                });
-                shapes.push(shadedCircle);
-            } else if (type === 'rectangle') {
-                const rectangle = new google.maps.Rectangle({
-                    map: map,
-                    bounds: bounds,
-                    fillColor: fillColor,
-                    fillOpacity: 0.35,
-                    strokeWeight: 0,
-                });
-                shapes.push(rectangle);
-            }
+            shape.addListener("click", () => {
+                shadingLayer.setMap(null);
+                shape.setMap(null);
+                shapes = shapes.filter(s => s !== shape && s !== shadingLayer);
+            });
+
+            shapes.push(shadingLayer);
         }
 
         function clearAllShapes() {
