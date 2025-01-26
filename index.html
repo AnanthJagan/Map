@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Map with Dynamic Shading</title>
+    <title>Interactive Map with Shading</title>
     <style>
         #map {
             height: 90vh;
@@ -26,8 +26,7 @@
             background-color: #0056b3;
         }
     </style>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQb_eJg_JyoCCyiGhHsymqTwGfFFSI6nc
-&libraries=drawing"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=drawing,geometry"></script>
 </head>
 <body>
     <div class="toolbar">
@@ -67,7 +66,7 @@
             });
             drawingManager.setMap(map);
 
-            // Draw Circle with User-Defined Radius
+            // Draw Circle
             document.getElementById("drawCircle").addEventListener("click", () => {
                 navigator.geolocation.getCurrentPosition((position) => {
                     const userLocation = {
@@ -93,7 +92,7 @@
                 });
             });
 
-            // Freehand Rectangle Drawing
+            // Draw Rectangle
             document.getElementById("drawRectangle").addEventListener("click", () => {
                 drawingManager.setDrawingMode(google.maps.drawing.OverlayType.RECTANGLE);
 
@@ -149,13 +148,15 @@
             document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
 
             // Shape Selection for Deletion
-            map.addListener("click", (event) => {
-                selectedShape = null;
-                shapes.forEach((shape) => {
-                    if (shape.containsLatLng && shape.containsLatLng(event.latLng)) {
-                        selectedShape = shape;
-                        alert("Shape selected. Press 'Delete Selected Shape' to remove it.");
+            shapes.forEach((shape) => {
+                google.maps.event.addListener(shape, "click", function () {
+                    if (selectedShape) {
+                        // Reset previously selected shape
+                        setShapeStroke(selectedShape, 1);
                     }
+                    selectedShape = shape;
+                    setShapeStroke(selectedShape, 3); // Highlight the selected shape
+                    alert("Shape selected. Press 'Delete Selected Shape' to remove it.");
                 });
             });
         }
@@ -216,15 +217,10 @@
             shapes.push(shadingLayer);
         }
 
-        function getShadingPaths(shape, type) {
-            if (type === 'circle') {
-                const center = shape.getCenter();
-                const radius = shape.getRadius();
-                return google.maps.geometry.spherical.computeCircle(center, radius);
-            } else if (type === 'rectangle') {
-                return shape.getBounds();
+        function setShapeStroke(shape, weight) {
+            if (shape instanceof google.maps.Rectangle || shape instanceof google.maps.Circle) {
+                shape.setOptions({ strokeWeight: weight });
             }
-            return [];
         }
 
         function clearAllShapes() {
@@ -240,3 +236,4 @@
     </script>
 </body>
 </html>
+
