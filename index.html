@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Map with Freehand Shapes</title>
+    <title>Interactive Map with Enhanced Features</title>
     <style>
         #map {
             height: 90vh;
@@ -33,6 +33,8 @@
     <div class="toolbar">
         <button id="drawCircle">Draw Circle</button>
         <button id="drawRectangle">Draw Rectangle</button>
+        <button id="shadeDirection">Shade Cardinal Direction</button>
+        <button id="toggleShading">Toggle Shading: Outside</button>
         <button id="clearShapes">Clear All Shapes</button>
     </div>
     <div id="map"></div>
@@ -46,7 +48,6 @@
                 zoom: 12,
             });
 
-            // Add drawing tools for freehand drawing
             drawingManager = new google.maps.drawing.DrawingManager({
                 drawingControl: false,
                 rectangleOptions: {
@@ -67,22 +68,34 @@
             });
             drawingManager.setMap(map);
 
-            // Event listeners for buttons
+            // Draw Circle with User-Defined Radius
             document.getElementById("drawCircle").addEventListener("click", () => {
-                const radius = parseFloat(prompt("Enter the circle radius in meters:"));
-                if (isNaN(radius) || radius <= 0) {
-                    alert("Please enter a valid radius!");
-                    return;
-                }
-                drawingManager.setDrawingMode(google.maps.drawing.OverlayType.CIRCLE);
-
-                google.maps.event.addListener(drawingManager, 'circlecomplete', function (circle) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                    };
+                    const radius = parseFloat(prompt("Enter the circle radius in meters:"));
+                    if (isNaN(radius) || radius <= 0) {
+                        alert("Please enter a valid radius!");
+                        return;
+                    }
+                    const circle = new google.maps.Circle({
+                        map: map,
+                        center: userLocation,
+                        radius: radius,
+                        fillColor: "#FF0000",
+                        fillOpacity: 0.35,
+                        strokeWeight: 1,
+                        editable: true,
+                        draggable: true,
+                    });
                     shapes.push(circle);
                     shadeArea(circle, 'circle', radius);
-                    drawingManager.setDrawingMode(null);
                 });
             });
 
+            // Freehand Rectangle Drawing
             document.getElementById("drawRectangle").addEventListener("click", () => {
                 drawingManager.setDrawingMode(google.maps.drawing.OverlayType.RECTANGLE);
 
@@ -93,7 +106,93 @@
                 });
             });
 
+            // Shade Cardinal Directions
+            document.getElementById("shadeDirection").addEventListener("click", () => {
+                const direction = prompt("Enter a cardinal direction to shade (N, S, E, W):").toUpperCase();
+                if (!['N', 'S', 'E', 'W'].includes(direction)) {
+                    alert("Invalid direction! Please enter N, S, E, or W.");
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                    };
+                    const bounds = getDirectionalBounds(userLocation, direction);
+                    const rectangle = new google.maps.Rectangle({
+                        map: map,
+                        bounds: bounds,
+                        fillColor: "#000000",
+                        fillOpacity: 0.35,
+                        strokeWeight: 0,
+                        editable: false,
+                        draggable: false,
+                    });
+                    shapes.push(rectangle);
+                });
+            });
+
+            // Toggle Shading (Inside/Outside)
+            document.getElementById("toggleShading").addEventListener("click", (e) => {
+                shadeOption = shadeOption === 'outside' ? 'inside' : 'outside';
+                e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
+            });
+
+            // Clear All Shapes
             document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
+
+            // Add right-click functionality to delete specific shapes
+            map.addListener("rightclick", (event) => {
+                const clickedPosition = event.latLng;
+                shapes = shapes.filter((shape) => {
+                    const containsPoint = shape.getBounds && shape.getBounds().contains(clickedPosition);
+                    if (containsPoint) {
+                        shape.setMap(null);
+                        return false;
+                    }
+                    return true;
+                });
+            });
+        }
+
+        function getDirectionalBounds(center, direction) {
+            const delta = 0.1; // Adjust this for larger/smaller areas
+            let bounds = null;
+            switch (direction) {
+                case 'N':
+                    bounds = {
+                        north: center.lat + delta,
+                        south: center.lat,
+                        east: center.lng + delta,
+                        west: center.lng - delta,
+                    };
+                    break;
+                case 'S':
+                    bounds = {
+                        north: center.lat,
+                        south: center.lat - delta,
+                        east: center.lng + delta,
+                        west: center.lng - delta,
+                    };
+                    break;
+                case 'E':
+                    bounds = {
+                        north: center.lat + delta,
+                        south: center.lat - delta,
+                        east: center.lng + delta,
+                        west: center.lng,
+                    };
+                    break;
+                case 'W':
+                    bounds = {
+                        north: center.lat + delta,
+                        south: center.lat - delta,
+                        east: center.lng,
+                        west: center.lng - delta,
+                    };
+                    break;
+            }
+            return bounds;
         }
 
         function shadeArea(shape, type, radius = null) {
@@ -103,7 +202,7 @@
             const fillColor = shadeOption === 'inside' ? "#00FF00" : "#000000";
 
             if (type === 'circle') {
-                const circle = new google.maps.Circle({
+                const shadedCircle = new google.maps.Circle({
                     map: map,
                     center: center,
                     radius: radius,
@@ -111,7 +210,7 @@
                     fillOpacity: 0.35,
                     strokeWeight: 0,
                 });
-                shapes.push(circle);
+                shapes.push(shadedCircle);
             } else if (type === 'rectangle') {
                 const rectangle = new google.maps.Rectangle({
                     map: map,
@@ -131,9 +230,8 @@
             shapes = [];
         }
 
-        // Load the map
+        // Initialize the Map
         window.onload = initMap;
     </script>
 </body>
 </html>
-
