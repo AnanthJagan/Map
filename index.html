@@ -35,12 +35,13 @@
         <button id="drawRectangle">Draw Rectangle</button>
         <button id="shadeDirection">Shade Cardinal Direction</button>
         <button id="toggleShading">Toggle Shading: Outside</button>
+        <button id="deleteSelectedShape">Delete Selected Shape</button>
         <button id="clearShapes">Clear All Shapes</button>
     </div>
     <div id="map"></div>
 
     <script>
-        let map, drawingManager, shapes = [], shadeOption = 'outside';
+        let map, drawingManager, shapes = [], shadeOption = 'outside', selectedShape = null;
 
         function initMap() {
             map = new google.maps.Map(document.getElementById("map"), {
@@ -88,7 +89,7 @@
                         draggable: true,
                     });
                     shapes.push(circle);
-                    attachShading(circle, 'circle', radius);
+                    attachShading(circle, 'circle');
                 });
             });
 
@@ -133,19 +134,28 @@
                 e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
             });
 
+            // Delete Selected Shape
+            document.getElementById("deleteSelectedShape").addEventListener("click", () => {
+                if (selectedShape) {
+                    selectedShape.setMap(null);
+                    shapes = shapes.filter((shape) => shape !== selectedShape);
+                    selectedShape = null;
+                } else {
+                    alert("Please select a shape to delete.");
+                }
+            });
+
             // Clear All Shapes
             document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
 
-            // Add functionality to delete a specific shape on click
+            // Shape Selection for Deletion
             map.addListener("click", (event) => {
-                const clickedPosition = event.latLng;
-                shapes = shapes.filter((shape) => {
-                    const containsPoint = shape.getBounds && shape.getBounds().contains(clickedPosition);
-                    if (containsPoint) {
-                        shape.setMap(null);
-                        return false;
+                selectedShape = null;
+                shapes.forEach((shape) => {
+                    if (shape.containsLatLng && shape.containsLatLng(event.latLng)) {
+                        selectedShape = shape;
+                        alert("Shape selected. Press 'Delete Selected Shape' to remove it.");
                     }
-                    return true;
                 });
             });
         }
@@ -190,27 +200,31 @@
             return bounds;
         }
 
-        function attachShading(shape, type, radius = null) {
-            const shadingLayer = new google.maps.Rectangle({
+        function attachShading(shape, type) {
+            const shadingLayer = new google.maps.Polygon({
                 map: map,
-                bounds: shape.getBounds(),
+                paths: getShadingPaths(shape, type),
                 fillColor: "red",
                 fillOpacity: 0.35,
                 strokeWeight: 0,
             });
 
-            // Dynamically update shading as the shape moves or is resized
             shape.addListener("bounds_changed", () => {
-                shadingLayer.setBounds(shape.getBounds());
-            });
-
-            shape.addListener("click", () => {
-                shadingLayer.setMap(null);
-                shape.setMap(null);
-                shapes = shapes.filter(s => s !== shape && s !== shadingLayer);
+                shadingLayer.setPaths(getShadingPaths(shape, type));
             });
 
             shapes.push(shadingLayer);
+        }
+
+        function getShadingPaths(shape, type) {
+            if (type === 'circle') {
+                const center = shape.getCenter();
+                const radius = shape.getRadius();
+                return google.maps.geometry.spherical.computeCircle(center, radius);
+            } else if (type === 'rectangle') {
+                return shape.getBounds();
+            }
+            return [];
         }
 
         function clearAllShapes() {
@@ -218,6 +232,7 @@
                 shape.setMap(null);
             }
             shapes = [];
+            selectedShape = null;
         }
 
         // Initialize the Map
