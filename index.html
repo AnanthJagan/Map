@@ -7,10 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-    }
+    body { margin: 0; font-family: sans-serif; }
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -34,13 +31,8 @@
       font-size: 1rem;
       flex-shrink: 0;
     }
-    button:hover {
-      background-color: #0056b3;
-    }
-    #map {
-      height: 90vh;
-      width: 100%;
-    }
+    button:hover { background-color: #0056b3; }
+    #map { height: 90vh; width: 100%; }
     .center-marker {
       font-size: 16px;
       text-align: center;
@@ -48,7 +40,6 @@
   </style>
 </head>
 <body>
-  <!-- Address Search -->
   <div class="toolbar">
     <input type="text" id="addressInput" placeholder="Search for an address..." />
     <button id="searchBtn">Search</button>
@@ -56,8 +47,6 @@
     <button id="drawRectAtSearch">Rect Here</button>
     <button id="toggleLock">🔒 Lock Editing</button>
   </div>
-
-  <!-- Main Toolbar -->
   <div class="toolbar">
     <button id="drawCircle">Draw Circle</button>
     <button id="drawRectangle">Draw Rectangle</button>
@@ -67,21 +56,15 @@
     <button id="clearShapes">Clear All Shapes</button>
     <button id="toggleShading">Toggle Shading: Outside</button>
   </div>
-
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-
   <script>
     let map = L.map("map").setView([37.7749, -122.4194], 13);
-    let shapes = [];
-    let selectedShape = null;
-    let shadeOption = "outside";
-    let searchMarker = null;
-    let searchCoords = null;
-    let centerMarker = null;
-    let isLocked = false;
+    let shapes = [], selectedShape = null;
+    let shadeOption = "outside", searchMarker = null, searchCoords = null, centerMarker = null;
+    let isLocked = false, isSelecting = false;
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -89,9 +72,8 @@
 
     function showCenterMarker(shape) {
       const center = shape.getBounds ? shape.getBounds().getCenter() : shape.getLatLng();
-      if (centerMarker) {
-        centerMarker.setLatLng(center);
-      } else {
+      if (centerMarker) centerMarker.setLatLng(center);
+      else {
         centerMarker = L.marker(center, {
           icon: L.divIcon({
             className: 'center-marker',
@@ -107,13 +89,20 @@
       if (!isLocked && shape.editing && typeof shape.editing.enable === "function") {
         shape.editing.enable();
       }
+      if (isSelecting) {
+        shape.on("click", () => {
+          if (selectedShape) selectedShape.setStyle({ color: "black" });
+          selectedShape = shape;
+          shape.setStyle({ color: "yellow" });
+          showCenterMarker(shape);
+        });
+      }
     }
 
     function setEditingState(enabled) {
       shapes.forEach((shape) => {
         if (shape.editing && typeof shape.editing.enable === "function") {
-          if (enabled) shape.editing.enable();
-          else shape.editing.disable();
+          enabled ? shape.editing.enable() : shape.editing.disable();
         }
       });
     }
@@ -126,10 +115,10 @@
 
     function getUserLocation(callback) {
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-          callback([position.coords.latitude, position.coords.longitude]);
+        navigator.geolocation.getCurrentPosition((pos) => {
+          callback([pos.coords.latitude, pos.coords.longitude]);
         }, () => {
-          alert("Geolocation failed. Using default SF location.");
+          alert("Geolocation failed. Using SF.");
           callback([37.7749, -122.4194]);
         });
       } else {
@@ -141,10 +130,7 @@
     document.getElementById("drawCircle").onclick = () => {
       getUserLocation((latlng) => {
         const radius = parseFloat(prompt("Enter radius in meters:"));
-        if (isNaN(radius) || radius <= 0) {
-          alert("Invalid radius");
-          return;
-        }
+        if (isNaN(radius) || radius <= 0) return alert("Invalid radius");
         const circle = L.circle(latlng, {
           radius,
           color: "black",
@@ -157,7 +143,7 @@
     };
 
     document.getElementById("drawRectangle").onclick = () => {
-      alert("Click and drag on the map to draw a rectangle.");
+      alert("Click and drag to draw a rectangle.");
       const drawControl = new L.Draw.Rectangle(map);
       drawControl.enable();
       map.once("draw:created", function (e) {
@@ -175,14 +161,9 @@
 
     document.getElementById("shadeDirection").onclick = () => {
       const dir = prompt("Enter N, S, E, or W:").toUpperCase();
-      if (!["N", "S", "E", "W"].includes(dir)) {
-        alert("Invalid direction!");
-        return;
-      }
-
+      if (!["N", "S", "E", "W"].includes(dir)) return alert("Invalid direction!");
       getUserLocation((latlng) => {
-        const delta = 0.01;
-        const [lat, lng] = latlng;
+        const delta = 0.01, [lat, lng] = latlng;
         let bounds;
         switch (dir) {
           case "N": bounds = [[lat, lng - 0.01], [lat + delta, lng + 0.01]]; break;
@@ -190,7 +171,6 @@
           case "E": bounds = [[lat - 0.01, lng], [lat + 0.01, lng + delta]]; break;
           case "W": bounds = [[lat - 0.01, lng - delta], [lat + 0.01, lng]]; break;
         }
-
         const rect = L.rectangle(bounds, {
           fillColor: "red",
           fillOpacity: 0.35,
@@ -202,71 +182,34 @@
     };
 
     document.getElementById("selectShape").onclick = () => {
-  alert("Click on a shape to select it. Click on empty space to deselect.");
+      isSelecting = true;
+      alert("Click a shape to select it. Click outside to deselect.");
 
-  const handleShapeClick = (shape) => {
-    return function () {
-      if (selectedShape) {
-        selectedShape.setStyle({ color: "black" });
-      }
-      selectedShape = shape;
-      shape.setStyle({ color: "yellow" });
-      showCenterMarker(shape);
-    };
-  };
-
-  const shapeClickHandlers = new Map();
-
-  shapes.forEach((shape) => {
-    const handler = handleShapeClick(shape);
-    shape.on("click", handler);
-    shapeClickHandlers.set(shape._leaflet_id, handler);
-  });
-
-  const mapClickHandler = () => {
-    if (selectedShape) {
-      selectedShape.setStyle({ color: "black" });
-      selectedShape = null;
-      if (centerMarker) {
-        map.removeLayer(centerMarker);
+      map.once("click", () => {
+        if (selectedShape) selectedShape.setStyle({ color: "black" });
+        selectedShape = null;
+        if (centerMarker) map.removeLayer(centerMarker);
         centerMarker = null;
-      }
-    }
-
-    shapes.forEach((shape) => {
-      const handler = shapeClickHandlers.get(shape._leaflet_id);
-      if (handler) shape.off("click", handler);
-    });
-
-    map.off("click", mapClickHandler);
-  };
-
-  map.on("click", mapClickHandler);
-};
-
+        isSelecting = false;
+      });
+    };
 
     document.getElementById("deleteSelectedShape").onclick = () => {
       if (selectedShape) {
         map.removeLayer(selectedShape);
         shapes = shapes.filter((s) => s !== selectedShape);
         selectedShape = null;
-        if (centerMarker) {
-          map.removeLayer(centerMarker);
-          centerMarker = null;
-        }
-      } else {
-        alert("No shape selected.");
-      }
+        if (centerMarker) map.removeLayer(centerMarker);
+        centerMarker = null;
+      } else alert("No shape selected.");
     };
 
     document.getElementById("clearShapes").onclick = () => {
       shapes.forEach((shape) => map.removeLayer(shape));
       shapes = [];
       selectedShape = null;
-      if (centerMarker) {
-        map.removeLayer(centerMarker);
-        centerMarker = null;
-      }
+      if (centerMarker) map.removeLayer(centerMarker);
+      centerMarker = null;
     };
 
     document.getElementById("toggleShading").onclick = (e) => {
@@ -285,11 +228,8 @@
           const coords = [parseFloat(lat), parseFloat(lon)];
           searchCoords = coords;
           map.setView(coords, 16);
-          if (searchMarker) {
-            searchMarker.setLatLng(coords);
-          } else {
-            searchMarker = L.marker(coords).addTo(map);
-          }
+          if (searchMarker) searchMarker.setLatLng(coords);
+          else searchMarker = L.marker(coords).addTo(map);
           searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
         });
     };
