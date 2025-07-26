@@ -202,18 +202,48 @@
     };
 
     document.getElementById("selectShape").onclick = () => {
-      alert("Click on a shape to select it.");
-      shapes.forEach((shape) => {
-        shape.on("click", () => {
-          if (selectedShape) {
-            selectedShape.setStyle({ color: "black" });
-          }
-          selectedShape = shape;
-          shape.setStyle({ color: "yellow" });
-          showCenterMarker(shape);
-        });
-      });
+  alert("Click on a shape to select it. Click on empty space to deselect.");
+
+  const handleShapeClick = (shape) => {
+    return function () {
+      if (selectedShape) {
+        selectedShape.setStyle({ color: "black" });
+      }
+      selectedShape = shape;
+      shape.setStyle({ color: "yellow" });
+      showCenterMarker(shape);
     };
+  };
+
+  const shapeClickHandlers = new Map();
+
+  shapes.forEach((shape) => {
+    const handler = handleShapeClick(shape);
+    shape.on("click", handler);
+    shapeClickHandlers.set(shape._leaflet_id, handler);
+  });
+
+  const mapClickHandler = () => {
+    if (selectedShape) {
+      selectedShape.setStyle({ color: "black" });
+      selectedShape = null;
+      if (centerMarker) {
+        map.removeLayer(centerMarker);
+        centerMarker = null;
+      }
+    }
+
+    shapes.forEach((shape) => {
+      const handler = shapeClickHandlers.get(shape._leaflet_id);
+      if (handler) shape.off("click", handler);
+    });
+
+    map.off("click", mapClickHandler);
+  };
+
+  map.on("click", mapClickHandler);
+};
+
 
     document.getElementById("deleteSelectedShape").onclick = () => {
       if (selectedShape) {
