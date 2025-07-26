@@ -89,14 +89,21 @@
       if (!isLocked && shape.editing && typeof shape.editing.enable === "function") {
         shape.editing.enable();
       }
-      if (isSelecting) {
-        shape.on("click", () => {
-          if (selectedShape) selectedShape.setStyle({ color: "black" });
-          selectedShape = shape;
-          shape.setStyle({ color: "yellow" });
-          showCenterMarker(shape);
-        });
-      }
+
+      shape.on("click", (e) => {
+        if (!isSelecting) return;
+
+        if (selectedShape) {
+          selectedShape.setStyle({ color: "black" });
+        }
+
+        selectedShape = shape;
+        shape.setStyle({ color: "yellow" });
+        showCenterMarker(shape);
+
+        e.originalEvent.stopPropagation();
+        isSelecting = false;
+      });
     }
 
     function setEditingState(enabled) {
@@ -182,34 +189,22 @@
     };
 
     document.getElementById("selectShape").onclick = () => {
-  isSelecting = true;
-  alert("Click a shape to select it. Tap outside to deselect.");
+      isSelecting = true;
+      alert("Click a shape to select it. Tap outside to deselect.");
 
-  shapes.forEach((shape) => {
-    shape.on("click", function handler(e) {
-      if (!isSelecting) return;
-      if (selectedShape) selectedShape.setStyle({ color: "black" });
-      selectedShape = shape;
-      shape.setStyle({ color: "yellow" });
-      showCenterMarker(shape);
-      e.originalEvent.stopPropagation(); // prevent map click from firing
-    });
-  });
+      const clearSelection = () => {
+        if (selectedShape) selectedShape.setStyle({ color: "black" });
+        selectedShape = null;
+        if (centerMarker) {
+          map.removeLayer(centerMarker);
+          centerMarker = null;
+        }
+        isSelecting = false;
+        map.off("click", clearSelection);
+      };
 
-  // Deselect when tapping on the map
-  const clearSelection = () => {
-    if (selectedShape) selectedShape.setStyle({ color: "black" });
-    selectedShape = null;
-    if (centerMarker) {
-      map.removeLayer(centerMarker);
-      centerMarker = null;
-    }
-    isSelecting = false;
-    map.off("click", clearSelection);
-  };
-
-  map.on("click", clearSelection);
-};
+      map.on("click", clearSelection);
+    };
 
     document.getElementById("deleteSelectedShape").onclick = () => {
       if (selectedShape) {
