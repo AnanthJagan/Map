@@ -152,6 +152,12 @@
         }
         makeEditable(shape);
         shapes.push(shape);
+        shape.on("click", () => {
+          if (selectedShape) selectedShape.setStyle({ color: "black" });
+          selectedShape = shape;
+          shape.setStyle({ color: "yellow" });
+          showCenterMarker(shape);
+        });
       });
     }
 
@@ -174,6 +180,12 @@
       shape.addTo(map);
       makeEditable(shape);
       shapes.push(shape);
+      shape.on("click", () => {
+        if (selectedShape) selectedShape.setStyle({ color: "black" });
+        selectedShape = shape;
+        shape.setStyle({ color: "yellow" });
+        showCenterMarker(shape);
+      });
       saveShapesToStorage();
     }
 
@@ -205,33 +217,83 @@
       });
     };
 
-    document.getElementById("clearShapes").onclick = () => {
-      shapes.forEach(s => map.removeLayer(s));
-      shapes = [];
-      selectedShape = null;
-      if (centerMarker) map.removeLayer(centerMarker);
-      centerMarker = null;
-      saveShapesToStorage();
+    document.getElementById("shadeDirection").onclick = () => {
+      const dir = prompt("Enter N, S, E, or W:").toUpperCase();
+      if (!["N", "S", "E", "W"].includes(dir)) return alert("Invalid direction!");
+      getUserLocation(([lat, lng]) => {
+        const delta = 0.01;
+        let bounds;
+        switch (dir) {
+          case "N": bounds = [[lat, lng - 0.01], [lat + delta, lng + 0.01]]; break;
+          case "S": bounds = [[lat - delta, lng - 0.01], [lat, lng + 0.01]]; break;
+          case "E": bounds = [[lat - 0.01, lng], [lat + 0.01, lng + delta]]; break;
+          case "W": bounds = [[lat - 0.01, lng - delta], [lat + 0.01, lng]]; break;
+        }
+        const rect = L.rectangle(bounds, {
+          fillColor: "red",
+          fillOpacity: 0.35,
+          color: "black"
+        });
+        addShapeAndSave(rect);
+      });
     };
 
-    document.getElementById("deleteSelectedShape").onclick = () => {
-      if (selectedShape) {
-        map.removeLayer(selectedShape);
-        shapes = shapes.filter(s => s !== selectedShape);
+    document.getElementById("selectShape").onclick = () => {
+      alert("Tap a shape to select it. Tap elsewhere to deselect.");
+      map.once("click", () => {
+        if (selectedShape) selectedShape.setStyle({ color: "black" });
         selectedShape = null;
         if (centerMarker) map.removeLayer(centerMarker);
         centerMarker = null;
-        saveShapesToStorage();
-      } else alert("No shape selected.");
+      });
     };
 
-    document.getElementById("toggleShading").onclick = (e) => {
-      shadeOption = shadeOption === "outside" ? "inside" : "outside";
-      e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
-      saveShapesToStorage();
+    document.getElementById("drawCircleAtSearch").onclick = () => {
+      if (!searchCoords) return alert("Search for a location first!");
+      const radius = parseFloat(prompt("Enter radius in meters:"));
+      if (isNaN(radius) || radius <= 0) return alert("Invalid radius.");
+      const circle = L.circle(searchCoords, {
+        radius,
+        color: "black",
+        fillColor: shadeOption === "inside" ? "red" : "transparent",
+        fillOpacity: 0.35
+      });
+      addShapeAndSave(circle);
     };
 
-    // Load shapes at page load
+    document.getElementById("drawRectAtSearch").onclick = () => {
+      if (!searchCoords) return alert("Search for a location first!");
+      const width = parseFloat(prompt("Enter width in degrees (~0.01 = ~1km):"));
+      const height = parseFloat(prompt("Enter height in degrees:"));
+      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) return alert("Invalid dimensions.");
+      const [lat, lng] = searchCoords;
+      const bounds = [[lat - height / 2, lng - width / 2], [lat + height / 2, lng + width / 2]];
+      const rect = L.rectangle(bounds, {
+        fillColor: shadeOption === "inside" ? "red" : "transparent",
+        fillOpacity: 0.35,
+        color: "black"
+      });
+      addShapeAndSave(rect);
+    };
+
+    document.getElementById("searchBtn").onclick = () => {
+      const query = document.getElementById("addressInput").value.trim();
+      if (!query) return alert("Enter a location or address.");
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.length) return alert("Location not found!");
+          const { lat, lon, display_name } = data[0];
+          const coords = [parseFloat(lat), parseFloat(lon)];
+          searchCoords = coords;
+          map.setView(coords, 16);
+          if (searchMarker) searchMarker.setLatLng(coords);
+          else searchMarker = L.marker(coords).addTo(map);
+          searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
+        });
+    };
+
+    // Load saved data on startup
     loadShapesFromStorage();
     setEditingState(!isLocked);
     document.getElementById("toggleLock").innerText = isLocked ? "🔓 Unlock Editing" : "🔒 Lock Editing";
