@@ -51,6 +51,8 @@
   <div class="toolbar">
     <input type="text" id="addressInput" placeholder="Search for an address..." />
     <button id="searchBtn">Search</button>
+    <button id="drawCircleAtSearch">Circle Here</button>
+    <button id="drawRectAtSearch">Rect Here</button>
   </div>
 
   <!-- Main Toolbar -->
@@ -75,6 +77,7 @@
     let selectedShape = null;
     let shadeOption = "outside";
     let searchMarker = null;
+    let searchCoords = null;
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -211,6 +214,7 @@
 
           const { lat, lon, display_name } = data[0];
           const coords = [parseFloat(lat), parseFloat(lon)];
+          searchCoords = coords;
 
           map.setView(coords, 16);
 
@@ -223,7 +227,43 @@
           searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
         });
     };
+
+    document.getElementById("drawCircleAtSearch").onclick = () => {
+      if (!searchCoords) return alert("Search for a location first!");
+      const radius = parseFloat(prompt("Enter radius in meters:"));
+      if (isNaN(radius) || radius <= 0) {
+        alert("Invalid radius.");
+        return;
+      }
+      const circle = L.circle(searchCoords, {
+        radius: radius,
+        color: "black",
+        fillColor: shadeOption === "inside" ? "red" : "transparent",
+        fillOpacity: 0.35
+      }).addTo(map);
+      shapes.push(circle);
+    };
+
+    document.getElementById("drawRectAtSearch").onclick = () => {
+      if (!searchCoords) return alert("Search for a location first!");
+      const width = parseFloat(prompt("Enter width in degrees (~0.01 = ~1km):"));
+      const height = parseFloat(prompt("Enter height in degrees:"));
+      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+        alert("Invalid width/height.");
+        return;
+      }
+      const [lat, lng] = searchCoords;
+      const bounds = [
+        [lat - height / 2, lng - width / 2],
+        [lat + height / 2, lng + width / 2],
+      ];
+      const rect = L.rectangle(bounds, {
+        fillColor: shadeOption === "inside" ? "red" : "transparent",
+        fillOpacity: 0.35,
+        color: "black"
+      }).addTo(map);
+      shapes.push(rect);
+    };
   </script>
 </body>
 </html>
-
