@@ -37,13 +37,6 @@
       font-size: 16px;
       text-align: center;
     }
-    .dimension-label {
-      background-color: white;
-      padding: 2px 4px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      font-size: 12px;
-    }
   </style>
 </head>
 <body>
@@ -76,7 +69,6 @@
     let searchCoords = null;
     let centerMarker = null;
     let isLocked = false;
-    let dimensionLabels = [];
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -97,43 +89,9 @@
       }
     }
 
-    function showDimensionLabel(shape) {
-      clearDimensionLabels();
-      let label;
-      if (shape instanceof L.Circle) {
-        const radiusMiles = shape.getRadius() / 1609.34;
-        label = L.marker(shape.getLatLng(), {
-          icon: L.divIcon({ className: 'dimension-label', html: `Radius: ${radiusMiles.toFixed(2)} mi` })
-        }).addTo(map);
-      } else if (shape instanceof L.Rectangle) {
-        const bounds = shape.getBounds();
-        const nw = bounds.getNorthWest();
-        const se = bounds.getSouthEast();
-        const widthMiles = Math.abs(nw.lng - se.lng) * 69;
-        const heightMiles = Math.abs(nw.lat - se.lat) * 69;
-        const center = bounds.getCenter();
-        label = L.marker(center, {
-          icon: L.divIcon({ className: 'dimension-label', html: `${widthMiles.toFixed(2)} mi × ${heightMiles.toFixed(2)} mi` })
-        }).addTo(map);
-      }
-      if (label) dimensionLabels.push(label);
-    }
-
-    function clearDimensionLabels() {
-      dimensionLabels.forEach(label => map.removeLayer(label));
-      dimensionLabels = [];
-    }
-
-    function updateDimensionOnEdit(shape) {
-      shape.on('edit', () => showDimensionLabel(shape));
-      shape.on('drag', () => showDimensionLabel(shape));
-    }
-
     function makeEditable(shape) {
       if (!isLocked && shape.editing && typeof shape.editing.enable === "function") {
         shape.editing.enable();
-        updateDimensionOnEdit(shape);
-        showDimensionLabel(shape);
       }
     }
 
@@ -157,7 +115,6 @@
       selectedShape = null;
       if (centerMarker) map.removeLayer(centerMarker);
       centerMarker = null;
-      clearDimensionLabels();
     };
 
     document.getElementById("deleteSelectedShape").onclick = () => {
@@ -167,7 +124,6 @@
         selectedShape = null;
         if (centerMarker) map.removeLayer(centerMarker);
         centerMarker = null;
-        clearDimensionLabels();
       } else alert("No shape selected.");
     };
 
@@ -176,28 +132,89 @@
       e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
     };
 
-    document.getElementById("drawRectangle").onclick = () => {
+    document.getElementById("drawCircle").onclick = () => {
       navigator.geolocation.getCurrentPosition((pos) => {
-        const widthMiles = parseFloat(prompt("Enter width in miles:"));
-        const heightMiles = parseFloat(prompt("Enter height in miles:"));
-        if (isNaN(widthMiles) || isNaN(heightMiles) || widthMiles <= 0 || heightMiles <= 0) return alert("Invalid dimensions");
-        const widthDeg = widthMiles / 69;
-        const heightDeg = heightMiles / 69;
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const bounds = [
-          [lat - heightDeg / 2, lng - widthDeg / 2],
-          [lat + heightDeg / 2, lng + widthDeg / 2]
-        ];
-        const rect = L.rectangle(bounds, {
+        const latlng = [pos.coords.latitude, pos.coords.longitude];
+        const radiusMiles = parseFloat(prompt("Enter radius in miles:"));
+        if (isNaN(radiusMiles) || radiusMiles <= 0) return alert("Invalid radius");
+        const circle = L.circle(latlng, {
+          radius: radiusMiles * 1609.34,
+          color: "black",
           fillColor: shadeOption === "inside" ? "red" : "transparent",
-          fillOpacity: 0.35,
-          color: "black"
+          fillOpacity: 0.35
         }).addTo(map);
-        makeEditable(rect);
-        shapes.push(rect);
+        makeEditable(circle);
+        shapes.push(circle);
       }, () => alert("Could not get location"));
     };
+
+    document.getElementById("drawCircleAtSearch").onclick = () => {
+      if (!searchCoords) return alert("Search for a location first!");
+      const radiusMiles = parseFloat(prompt("Enter radius in miles:"));
+      if (isNaN(radiusMiles) || radiusMiles <= 0) return alert("Invalid radius");
+      const circle = L.circle(searchCoords, {
+        radius: radiusMiles * 1609.34,
+        color: "black",
+        fillColor: shadeOption === "inside" ? "red" : "transparent",
+        fillOpacity: 0.35
+      }).addTo(map);
+      makeEditable(circle);
+      shapes.push(circle);
+    };
+
+    document.getElementById("drawRectAtSearch").onclick = () => {
+      if (!searchCoords) return alert("Search for a location first!");
+      const widthMiles = parseFloat(prompt("Enter width in miles:"));
+      const heightMiles = parseFloat(prompt("Enter height in miles:"));
+      if (isNaN(widthMiles) || isNaN(heightMiles) || widthMiles <= 0 || heightMiles <= 0) return alert("Invalid dimensions");
+      const widthDeg = widthMiles / 69;
+      const heightDeg = heightMiles / 69;
+      const [lat, lng] = searchCoords;
+      const bounds = [
+        [lat - heightDeg / 2, lng - widthDeg / 2],
+        [lat + heightDeg / 2, lng + widthDeg / 2]
+      ];
+      const rect = L.rectangle(bounds, {
+        fillColor: shadeOption === "inside" ? "red" : "transparent",
+        fillOpacity: 0.35,
+        color: "black"
+      }).addTo(map);
+      makeEditable(rect);
+      shapes.push(rect);
+    };
+
+    document.getElementById("selectShape").onclick = () => {
+      alert("Click on a shape to select it.");
+      shapes.forEach((shape) => {
+        shape.on("click", () => {
+          if (selectedShape) {
+            selectedShape.setStyle({ color: "black" });
+          }
+          selectedShape = shape;
+          shape.setStyle({ color: "yellow" });
+          showCenterMarker(shape);
+        });
+      });
+    };
+
+    document.getElementById("searchBtn").onclick = () => {
+      const query = document.getElementById("addressInput").value.trim();
+      if (!query) return alert("Enter a location or address.");
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.length) return alert("Location not found!");
+          const { lat, lon, display_name } = data[0];
+          const coords = [parseFloat(lat), parseFloat(lon)];
+          searchCoords = coords;
+          map.setView(coords, 16);
+          if (searchMarker) searchMarker.setLatLng(coords);
+          else searchMarker = L.marker(coords).addTo(map);
+          searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
+        });
+    };
+
+    document.getElementById("toggleLock").innerText = isLocked ? "🔓 Unlock Editing" : "🔒 Lock Editing";
   </script>
 </body>
 </html>
