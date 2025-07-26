@@ -74,6 +74,25 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    const drawControl = new L.Control.Draw({
+      draw: {
+        polygon: false,
+        polyline: false,
+        circle: false,
+        marker: false,
+        circlemarker: false,
+        rectangle: {
+          shapeOptions: {
+            color: "black",
+            fillColor: shadeOption === "inside" ? "red" : "transparent",
+            fillOpacity: 0.35
+          }
+        }
+      },
+      edit: false
+    });
+    map.addControl(drawControl);
+
     function showCenterMarker(shape) {
       const center = shape.getBounds ? shape.getBounds().getCenter() : shape.getLatLng();
       if (centerMarker) centerMarker.setLatLng(center);
@@ -146,6 +165,16 @@
         makeEditable(circle);
         shapes.push(circle);
       }, () => alert("Could not get location"));
+    };
+
+    document.getElementById("drawRectangle").onclick = () => {
+      map.once("draw:created", (e) => {
+        const layer = e.layer;
+        layer.addTo(map);
+        makeEditable(layer);
+        shapes.push(layer);
+      });
+      new L.Draw.Rectangle(map, drawControl.options.draw.rectangle).enable();
     };
 
     document.getElementById("drawCircleAtSearch").onclick = () => {
