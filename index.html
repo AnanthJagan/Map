@@ -241,13 +241,13 @@
 
     document.getElementById("toggleShading").onclick = (e) => {
       shadeOption = shadeOption === "outside" ? "inside" : "outside";
-      e.target.innerText = Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)};
+      e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
     };
 
     document.getElementById("searchBtn").onclick = () => {
       const query = document.getElementById("addressInput").value.trim();
       if (!query) return alert("Enter a location or address.");
-      fetch(https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)})
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
         .then(res => res.json())
         .then(data => {
           if (!data.length) return alert("Location not found!");
@@ -260,7 +260,7 @@
           } else {
             searchMarker = L.marker(coords).addTo(map);
           }
-          searchMarker.bindPopup(📍 ${display_name}).openPopup();
+          searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
         });
     };
 
