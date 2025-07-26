@@ -183,7 +183,8 @@
         if (isNaN(widthMiles) || isNaN(heightMiles) || widthMiles <= 0 || heightMiles <= 0) return alert("Invalid dimensions");
         const widthDeg = widthMiles / 69;
         const heightDeg = heightMiles / 69;
-        const [lat, lng] = [pos.coords.latitude, pos.coords.longitude];
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
         const bounds = [
           [lat - heightDeg / 2, lng - widthDeg / 2],
           [lat + heightDeg / 2, lng + widthDeg / 2]
@@ -197,8 +198,6 @@
         shapes.push(rect);
       }, () => alert("Could not get location"));
     };
-
-    // rest of your code...
   </script>
 </body>
 </html>
