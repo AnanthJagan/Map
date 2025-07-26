@@ -69,6 +69,8 @@
     let searchCoords = null;
     let centerMarker = null;
     let isLocked = false;
+    let shapeLabels = new Map(); // NEW: Track shape-to-label mappings
+
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -118,6 +120,7 @@ function attachDimensionLabel(shape) {
     }),
     interactive: false
   }).addTo(map);
+  shapeLabels.set(shape, label); // Save for later deletion
 
   function updateLabel() {
     let content = '';
@@ -180,14 +183,18 @@ function makeEditable(shape) {
     };
 
     document.getElementById("deleteSelectedShape").onclick = () => {
-      if (selectedShape) {
-        map.removeLayer(selectedShape);
-        shapes = shapes.filter(s => s !== selectedShape);
-        selectedShape = null;
-        if (centerMarker) map.removeLayer(centerMarker);
-        centerMarker = null;
-      } else alert("No shape selected.");
-    };
+  if (selectedShape) {
+    map.removeLayer(selectedShape);
+    if (shapeLabels.has(selectedShape)) {
+      map.removeLayer(shapeLabels.get(selectedShape));
+      shapeLabels.delete(selectedShape);
+    }
+    shapes = shapes.filter(s => s !== selectedShape);
+    selectedShape = null;
+    if (centerMarker) map.removeLayer(centerMarker);
+    centerMarker = null;
+  } else alert("No shape selected.");
+};
 
     document.getElementById("toggleShading").onclick = (e) => {
       shadeOption = shadeOption === "outside" ? "inside" : "outside";
