@@ -1,228 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Map with Shading</title>
-    <style>
-        #map {
-            height: 90vh;
-            width: 100%;
-        }
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            margin: 10px;
-        }
-        button {
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            background-color: #007bff;
-            color: white;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .selected {
-            border: 2px solid yellow;
-        }
-    </style>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQb_eJg_JyoCCyiGhHsymqTwGfFFSI6nc
-&libraries=drawing,geometry"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Leaflet Interactive Map</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"
+  />
+  <style>
+    #map {
+      height: 90vh;
+      width: 100%;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 10px;
+    }
+    button {
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .selected-shape {
+      outline: 2px solid yellow;
+    }
+  </style>
 </head>
 <body>
-    <div class="toolbar">
-        <button id="drawCircle">Draw Circle</button>
-        <button id="drawRectangle">Draw Rectangle</button>
-        <button id="shadeDirection">Shade Cardinal Direction</button>
-        <button id="selectShape">Select Shape</button>
-        <button id="deleteSelectedShape">Delete Selected Shape</button>
-        <button id="clearShapes">Clear All Shapes</button>
-        <button id="toggleShading">Toggle Shading: Outside</button>
-    </div>
-    <div id="map"></div>
+  <div class="toolbar">
+    <button id="drawCircle">Draw Circle</button>
+    <button id="drawRectangle">Draw Rectangle</button>
+    <button id="shadeDirection">Shade Cardinal Direction</button>
+    <button id="selectShape">Select Shape</button>
+    <button id="deleteSelectedShape">Delete Selected Shape</button>
+    <button id="clearShapes">Clear All Shapes</button>
+    <button id="toggleShading">Toggle Shading: Outside</button>
+  </div>
+  <div id="map"></div>
 
-    <script>
-        let map, drawingManager, shapes = [], selectedShape = null, shadeOption = 'outside';
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
-        function initMap() {
-            map = new google.maps.Map(document.getElementById("map"), {
-                center: { lat: 37.7749, lng: -122.4194 },
-                zoom: 12,
-            });
+  <script>
+    let map = L.map("map").setView([37.7749, -122.4194], 13);
+    let shapes = [];
+    let selectedShape = null;
+    let shadeOption = "outside";
 
-            drawingManager = new google.maps.drawing.DrawingManager({
-                drawingControl: false,
-                rectangleOptions: {
-                    fillColor: "transparent",
-                    strokeWeight: 1,
-                    editable: true,
-                    draggable: true,
-                },
-                circleOptions: {
-                    fillColor: "transparent",
-                    strokeWeight: 1,
-                    editable: true,
-                    draggable: true,
-                },
-            });
-            drawingManager.setMap(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-            // Draw Circle
-            document.getElementById("drawCircle").addEventListener("click", () => {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const userLocation = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    };
-                    const radius = parseFloat(prompt("Enter the circle radius in meters:"));
-                    if (isNaN(radius) || radius <= 0) {
-                        alert("Please enter a valid radius!");
-                        return;
-                    }
-                    const circle = new google.maps.Circle({
-                        map: map,
-                        center: userLocation,
-                        radius: radius,
-                        fillColor: shadeOption === 'inside' ? "red" : "transparent",
-                        fillOpacity: 0.35,
-                        strokeWeight: 1,
-                        editable: true,
-                        draggable: true,
-                    });
-                    shapes.push(circle);
-                    attachShapeEvents(circle, 'circle');
-                });
-            });
+    function getUserLocation(callback) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          callback([position.coords.latitude, position.coords.longitude]);
+        }, () => {
+          alert("Geolocation failed. Using default SF location.");
+          callback([37.7749, -122.4194]);
+        });
+      } else {
+        alert("Geolocation not supported.");
+        callback([37.7749, -122.4194]);
+      }
+    }
 
-            // Draw Rectangle
-            document.getElementById("drawRectangle").addEventListener("click", () => {
-                drawingManager.setDrawingMode(google.maps.drawing.OverlayType.RECTANGLE);
+    document.getElementById("drawCircle").onclick = () => {
+      getUserLocation((latlng) => {
+        const radius = parseFloat(prompt("Enter radius in meters:"));
+        if (isNaN(radius) || radius <= 0) {
+          alert("Invalid radius");
+          return;
+        }
+        const circle = L.circle(latlng, {
+          radius: radius,
+          color: "black",
+          fillColor: shadeOption === "inside" ? "red" : "transparent",
+          fillOpacity: 0.35,
+          draggable: true
+        }).addTo(map);
+        shapes.push(circle);
+      });
+    };
 
-                google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
-                    rectangle.setOptions({
-                        fillColor: shadeOption === 'inside' ? "red" : "transparent",
-                        fillOpacity: 0.35,
-                    });
-                    shapes.push(rectangle);
-                    attachShapeEvents(rectangle, 'rectangle');
-                    drawingManager.setDrawingMode(null);
-                });
-            });
+    document.getElementById("drawRectangle").onclick = () => {
+      alert("Click and drag on the map to draw a rectangle.");
+      const drawControl = new L.Draw.Rectangle(map);
+      drawControl.enable();
+      map.once("draw:created", function (e) {
+        const rect = e.layer;
+        rect.setStyle({
+          fillColor: shadeOption === "inside" ? "red" : "transparent",
+          fillOpacity: 0.35,
+          color: "black"
+        });
+        rect.addTo(map);
+        shapes.push(rect);
+      });
+    };
 
-            // Shade Cardinal Directions
-            document.getElementById("shadeDirection").addEventListener("click", () => {
-                const direction = prompt("Enter a cardinal direction to shade (N, S, E, W):").toUpperCase();
-                if (!['N', 'S', 'E', 'W'].includes(direction)) {
-                    alert("Invalid direction! Please enter N, S, E, or W.");
-                    return;
-                }
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const userLocation = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    };
-                    const bounds = getDirectionalBounds(userLocation, direction);
-                    const rectangle = new google.maps.Rectangle({
-                        map: map,
-                        bounds: bounds,
-                        fillColor: "red",
-                        fillOpacity: 0.35,
-                        strokeWeight: 0,
-                    });
-                    shapes.push(rectangle);
-                    attachShapeEvents(rectangle, 'rectangle');
-                });
-            });
+    document.getElementById("shadeDirection").onclick = () => {
+      const dir = prompt("Enter N, S, E, or W:").toUpperCase();
+      if (!["N", "S", "E", "W"].includes(dir)) {
+        alert("Invalid direction!");
+        return;
+      }
 
-            // Select Shape
-            document.getElementById("selectShape").addEventListener("click", () => {
-                alert("Click on a shape to select it for deletion.");
-                shapes.forEach((shape) => {
-                    google.maps.event.addListener(shape, "click", function () {
-                        if (selectedShape) {
-                            resetShapeAppearance(selectedShape);
-                        }
-                        selectedShape = shape;
-                        highlightShape(shape);
-                        alert("Shape selected.");
-                    });
-                });
-            });
+      getUserLocation((latlng) => {
+        const delta = 0.01;
+        const [lat, lng] = latlng;
+        let bounds;
 
-            // Delete Selected Shape
-            document.getElementById("deleteSelectedShape").addEventListener("click", () => {
-                if (selectedShape) {
-                    selectedShape.setMap(null);
-                    shapes = shapes.filter((shape) => shape !== selectedShape);
-                    selectedShape = null;
-                } else {
-                    alert("No shape selected. Please use 'Select Shape' first.");
-                }
-            });
-
-            // Clear All Shapes
-            document.getElementById("clearShapes").addEventListener("click", clearAllShapes);
-
-            // Toggle Shading (Inside/Outside)
-            document.getElementById("toggleShading").addEventListener("click", (e) => {
-                shadeOption = shadeOption === 'outside' ? 'inside' : 'outside';
-                e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
-            });
+        switch (dir) {
+          case "N":
+            bounds = [[lat, lng - 0.01], [lat + delta, lng + 0.01]];
+            break;
+          case "S":
+            bounds = [[lat - delta, lng - 0.01], [lat, lng + 0.01]];
+            break;
+          case "E":
+            bounds = [[lat - 0.01, lng], [lat + 0.01, lng + delta]];
+            break;
+          case "W":
+            bounds = [[lat - 0.01, lng - delta], [lat + 0.01, lng]];
+            break;
         }
 
-        function getDirectionalBounds(center, direction) {
-            const delta = 0.1;
-            let bounds = null;
-            switch (direction) {
-                case 'N':
-                    bounds = { north: center.lat + delta, south: center.lat, east: center.lng + delta, west: center.lng - delta };
-                    break;
-                case 'S':
-                    bounds = { north: center.lat, south: center.lat - delta, east: center.lng + delta, west: center.lng - delta };
-                    break;
-                case 'E':
-                    bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng + delta, west: center.lng };
-                    break;
-                case 'W':
-                    bounds = { north: center.lat + delta, south: center.lat - delta, east: center.lng, west: center.lng - delta };
-                    break;
-            }
-            return bounds;
-        }
+        const rect = L.rectangle(bounds, {
+          fillColor: "red",
+          fillOpacity: 0.35,
+          color: "black"
+        }).addTo(map);
+        shapes.push(rect);
+      });
+    };
 
-        function attachShapeEvents(shape, type) {
-            shape.addListener("bounds_changed", () => {
-                // Update shading dynamically if needed
-            });
-        }
+    document.getElementById("selectShape").onclick = () => {
+      alert("Click on a shape to select it.");
+      shapes.forEach((shape) => {
+        shape.on("click", () => {
+          if (selectedShape) {
+            selectedShape.setStyle({ color: "black" });
+          }
+          selectedShape = shape;
+          shape.setStyle({ color: "yellow" });
+        });
+      });
+    };
 
-        function highlightShape(shape) {
-            if (shape instanceof google.maps.Circle || shape instanceof google.maps.Rectangle) {
-                shape.setOptions({ strokeWeight: 3, strokeColor: "yellow" });
-            }
-        }
+    document.getElementById("deleteSelectedShape").onclick = () => {
+      if (selectedShape) {
+        map.removeLayer(selectedShape);
+        shapes = shapes.filter((s) => s !== selectedShape);
+        selectedShape = null;
+      } else {
+        alert("No shape selected.");
+      }
+    };
 
-        function resetShapeAppearance(shape) {
-            if (shape instanceof google.maps.Circle || shape instanceof google.maps.Rectangle) {
-                shape.setOptions({ strokeWeight: 1, strokeColor: "#000" });
-            }
-        }
+    document.getElementById("clearShapes").onclick = () => {
+      shapes.forEach((shape) => map.removeLayer(shape));
+      shapes = [];
+      selectedShape = null;
+    };
 
-        function clearAllShapes() {
-            for (let shape of shapes) {
-                shape.setMap(null);
-            }
-            shapes = [];
-            selectedShape = null;
-        }
-
-        // Initialize the Map
-        window.onload = initMap;
-    </script>
+    document.getElementById("toggleShading").onclick = (e) => {
+      shadeOption = shadeOption === "outside" ? "inside" : "outside";
+      e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
+    };
+  </script>
 </body>
 </html>
-
-
