@@ -4,24 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Leaflet Interactive Map</title>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
-    #map {
-      height: 90vh;
-      width: 100%;
+    body {
+      margin: 0;
+      font-family: sans-serif;
     }
     .toolbar {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin: 10px;
+      padding: 10px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
     }
     button {
       padding: 10px;
@@ -30,9 +31,15 @@
       cursor: pointer;
       background-color: #007bff;
       color: white;
+      font-size: 1rem;
+      flex-shrink: 0;
     }
     button:hover {
       background-color: #0056b3;
+    }
+    #map {
+      height: 90vh;
+      width: 100%;
     }
     .selected-shape {
       outline: 2px solid yellow;
@@ -40,6 +47,13 @@
   </style>
 </head>
 <body>
+  <!-- Address Search -->
+  <div class="toolbar">
+    <input type="text" id="addressInput" placeholder="Search for an address..." />
+    <button id="searchBtn">Search</button>
+  </div>
+
+  <!-- Main Toolbar -->
   <div class="toolbar">
     <button id="drawCircle">Draw Circle</button>
     <button id="drawRectangle">Draw Rectangle</button>
@@ -49,6 +63,7 @@
     <button id="clearShapes">Clear All Shapes</button>
     <button id="toggleShading">Toggle Shading: Outside</button>
   </div>
+
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -59,6 +74,7 @@
     let shapes = [];
     let selectedShape = null;
     let shadeOption = "outside";
+    let searchMarker = null;
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -89,8 +105,7 @@
           radius: radius,
           color: "black",
           fillColor: shadeOption === "inside" ? "red" : "transparent",
-          fillOpacity: 0.35,
-          draggable: true
+          fillOpacity: 0.35
         }).addTo(map);
         shapes.push(circle);
       });
@@ -181,6 +196,34 @@
       shadeOption = shadeOption === "outside" ? "inside" : "outside";
       e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
     };
+
+    document.getElementById("searchBtn").onclick = () => {
+      const query = document.getElementById("addressInput").value.trim();
+      if (!query) return alert("Enter a location or address.");
+
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.length === 0) {
+            alert("Location not found!");
+            return;
+          }
+
+          const { lat, lon, display_name } = data[0];
+          const coords = [parseFloat(lat), parseFloat(lon)];
+
+          map.setView(coords, 16);
+
+          if (searchMarker) {
+            searchMarker.setLatLng(coords);
+          } else {
+            searchMarker = L.marker(coords, { draggable: false }).addTo(map);
+          }
+
+          searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
+        });
+    };
   </script>
 </body>
 </html>
+
