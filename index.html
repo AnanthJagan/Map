@@ -64,11 +64,11 @@
     let map = L.map("map").setView([37.7749, -122.4194], 13);
     let shapes = [];
     let selectedShape = null;
-    let shadeOption = localStorage.getItem("shadeOption") || "outside";
+    let shadeOption = "outside";
     let searchMarker = null;
     let searchCoords = null;
     let centerMarker = null;
-    let isLocked = localStorage.getItem("isLocked") === "true";
+    let isLocked = false;
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -103,201 +103,37 @@
       });
     }
 
-    function saveShapesToStorage() {
-      const data = shapes.map(shape => {
-        if (shape instanceof L.Circle) {
-          return {
-            type: "circle",
-            center: shape.getLatLng(),
-            radius: shape.getRadius(),
-            color: shape.options.color,
-            fillColor: shape.options.fillColor,
-            fillOpacity: shape.options.fillOpacity
-          };
-        } else if (shape instanceof L.Rectangle) {
-          return {
-            type: "rectangle",
-            bounds: shape.getBounds(),
-            color: shape.options.color,
-            fillColor: shape.options.fillColor,
-            fillOpacity: shape.options.fillOpacity
-          };
-        }
-        return null;
-      });
-      localStorage.setItem("savedShapes", JSON.stringify(data));
-      localStorage.setItem("shadeOption", shadeOption);
-      localStorage.setItem("isLocked", isLocked);
-    }
-
-    function loadShapesFromStorage() {
-      const raw = localStorage.getItem("savedShapes");
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      data.forEach(obj => {
-        let shape;
-        if (obj.type === "circle") {
-          shape = L.circle(obj.center, {
-            radius: obj.radius,
-            color: obj.color,
-            fillColor: obj.fillColor,
-            fillOpacity: obj.fillOpacity
-          }).addTo(map);
-        } else if (obj.type === "rectangle") {
-          shape = L.rectangle(obj.bounds, {
-            color: obj.color,
-            fillColor: obj.fillColor,
-            fillOpacity: obj.fillOpacity
-          }).addTo(map);
-        }
-        makeEditable(shape);
-        shapes.push(shape);
-        shape.on("click", () => {
-          if (selectedShape) selectedShape.setStyle({ color: "black" });
-          selectedShape = shape;
-          shape.setStyle({ color: "yellow" });
-          showCenterMarker(shape);
-        });
-      });
-    }
-
     document.getElementById("toggleLock").onclick = (e) => {
       isLocked = !isLocked;
       setEditingState(!isLocked);
       e.target.innerText = isLocked ? "🔓 Unlock Editing" : "🔒 Lock Editing";
-      saveShapesToStorage();
     };
 
-    function getUserLocation(callback) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          callback([pos.coords.latitude, pos.coords.longitude]);
-        }, () => callback([37.7749, -122.4194]));
-      } else callback([37.7749, -122.4194]);
-    }
-
-    function addShapeAndSave(shape) {
-      shape.addTo(map);
-      makeEditable(shape);
-      shapes.push(shape);
-      shape.on("click", () => {
-        if (selectedShape) selectedShape.setStyle({ color: "black" });
-        selectedShape = shape;
-        shape.setStyle({ color: "yellow" });
-        showCenterMarker(shape);
-      });
-      saveShapesToStorage();
-    }
-
-    document.getElementById("drawCircle").onclick = () => {
-      getUserLocation((latlng) => {
-        const radius = parseFloat(prompt("Enter radius in meters:"));
-        if (isNaN(radius) || radius <= 0) return alert("Invalid radius");
-        addShapeAndSave(L.circle(latlng, {
-          radius,
-          color: "black",
-          fillColor: shadeOption === "inside" ? "red" : "transparent",
-          fillOpacity: 0.35
-        }));
-      });
+    document.getElementById("clearShapes").onclick = () => {
+      shapes.forEach(s => map.removeLayer(s));
+      shapes = [];
+      selectedShape = null;
+      if (centerMarker) map.removeLayer(centerMarker);
+      centerMarker = null;
     };
 
-    document.getElementById("drawRectangle").onclick = () => {
-      alert("Click and drag on the map to draw a rectangle.");
-      const drawControl = new L.Draw.Rectangle(map);
-      drawControl.enable();
-      map.once("draw:created", function (e) {
-        const rect = e.layer;
-        rect.setStyle({
-          fillColor: shadeOption === "inside" ? "red" : "transparent",
-          fillOpacity: 0.35,
-          color: "black"
-        });
-        addShapeAndSave(rect);
-      });
-    };
-
-    document.getElementById("shadeDirection").onclick = () => {
-      const dir = prompt("Enter N, S, E, or W:").toUpperCase();
-      if (!["N", "S", "E", "W"].includes(dir)) return alert("Invalid direction!");
-      getUserLocation(([lat, lng]) => {
-        const delta = 0.01;
-        let bounds;
-        switch (dir) {
-          case "N": bounds = [[lat, lng - 0.01], [lat + delta, lng + 0.01]]; break;
-          case "S": bounds = [[lat - delta, lng - 0.01], [lat, lng + 0.01]]; break;
-          case "E": bounds = [[lat - 0.01, lng], [lat + 0.01, lng + delta]]; break;
-          case "W": bounds = [[lat - 0.01, lng - delta], [lat + 0.01, lng]]; break;
-        }
-        const rect = L.rectangle(bounds, {
-          fillColor: "red",
-          fillOpacity: 0.35,
-          color: "black"
-        });
-        addShapeAndSave(rect);
-      });
-    };
-
-    document.getElementById("selectShape").onclick = () => {
-      alert("Tap a shape to select it. Tap elsewhere to deselect.");
-      map.once("click", () => {
-        if (selectedShape) selectedShape.setStyle({ color: "black" });
+    document.getElementById("deleteSelectedShape").onclick = () => {
+      if (selectedShape) {
+        map.removeLayer(selectedShape);
+        shapes = shapes.filter(s => s !== selectedShape);
         selectedShape = null;
         if (centerMarker) map.removeLayer(centerMarker);
         centerMarker = null;
-      });
+      } else alert("No shape selected.");
     };
 
-    document.getElementById("drawCircleAtSearch").onclick = () => {
-      if (!searchCoords) return alert("Search for a location first!");
-      const radius = parseFloat(prompt("Enter radius in meters:"));
-      if (isNaN(radius) || radius <= 0) return alert("Invalid radius.");
-      const circle = L.circle(searchCoords, {
-        radius,
-        color: "black",
-        fillColor: shadeOption === "inside" ? "red" : "transparent",
-        fillOpacity: 0.35
-      });
-      addShapeAndSave(circle);
+    document.getElementById("toggleShading").onclick = (e) => {
+      shadeOption = shadeOption === "outside" ? "inside" : "outside";
+      e.target.innerText = `Toggle Shading: ${shadeOption.charAt(0).toUpperCase() + shadeOption.slice(1)}`;
     };
 
-    document.getElementById("drawRectAtSearch").onclick = () => {
-      if (!searchCoords) return alert("Search for a location first!");
-      const width = parseFloat(prompt("Enter width in degrees (~0.01 = ~1km):"));
-      const height = parseFloat(prompt("Enter height in degrees:"));
-      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) return alert("Invalid dimensions.");
-      const [lat, lng] = searchCoords;
-      const bounds = [[lat - height / 2, lng - width / 2], [lat + height / 2, lng + width / 2]];
-      const rect = L.rectangle(bounds, {
-        fillColor: shadeOption === "inside" ? "red" : "transparent",
-        fillOpacity: 0.35,
-        color: "black"
-      });
-      addShapeAndSave(rect);
-    };
-
-    document.getElementById("searchBtn").onclick = () => {
-      const query = document.getElementById("addressInput").value.trim();
-      if (!query) return alert("Enter a location or address.");
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
-        .then(res => res.json())
-        .then(data => {
-          if (!data.length) return alert("Location not found!");
-          const { lat, lon, display_name } = data[0];
-          const coords = [parseFloat(lat), parseFloat(lon)];
-          searchCoords = coords;
-          map.setView(coords, 16);
-          if (searchMarker) searchMarker.setLatLng(coords);
-          else searchMarker = L.marker(coords).addTo(map);
-          searchMarker.bindPopup(`📍 ${display_name}`).openPopup();
-        });
-    };
-
-    // Load saved data on startup
-    loadShapesFromStorage();
-    setEditingState(!isLocked);
+    // Restore button text
     document.getElementById("toggleLock").innerText = isLocked ? "🔓 Unlock Editing" : "🔒 Lock Editing";
   </script>
 </body>
 </html>
-
