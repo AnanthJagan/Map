@@ -182,17 +182,34 @@
     };
 
     document.getElementById("selectShape").onclick = () => {
-      isSelecting = true;
-      alert("Click a shape to select it. Click outside to deselect.");
+  isSelecting = true;
+  alert("Click a shape to select it. Tap outside to deselect.");
 
-      map.once("click", () => {
-        if (selectedShape) selectedShape.setStyle({ color: "black" });
-        selectedShape = null;
-        if (centerMarker) map.removeLayer(centerMarker);
-        centerMarker = null;
-        isSelecting = false;
-      });
-    };
+  shapes.forEach((shape) => {
+    shape.on("click", function handler(e) {
+      if (!isSelecting) return;
+      if (selectedShape) selectedShape.setStyle({ color: "black" });
+      selectedShape = shape;
+      shape.setStyle({ color: "yellow" });
+      showCenterMarker(shape);
+      e.originalEvent.stopPropagation(); // prevent map click from firing
+    });
+  });
+
+  // Deselect when tapping on the map
+  const clearSelection = () => {
+    if (selectedShape) selectedShape.setStyle({ color: "black" });
+    selectedShape = null;
+    if (centerMarker) {
+      map.removeLayer(centerMarker);
+      centerMarker = null;
+    }
+    isSelecting = false;
+    map.off("click", clearSelection);
+  };
+
+  map.on("click", clearSelection);
+};
 
     document.getElementById("deleteSelectedShape").onclick = () => {
       if (selectedShape) {
