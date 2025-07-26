@@ -41,8 +41,9 @@
       height: 90vh;
       width: 100%;
     }
-    .selected-shape {
-      outline: 2px solid yellow;
+    .center-marker {
+      font-size: 16px;
+      text-align: center;
     }
   </style>
 </head>
@@ -78,10 +79,35 @@
     let shadeOption = "outside";
     let searchMarker = null;
     let searchCoords = null;
+    let centerMarker = null;
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
+
+    function showCenterMarker(shape) {
+      const center = shape.getBounds
+        ? shape.getBounds().getCenter()
+        : shape.getLatLng();
+      if (centerMarker) {
+        centerMarker.setLatLng(center);
+      } else {
+        centerMarker = L.marker(center, {
+          icon: L.divIcon({
+            className: 'center-marker',
+            html: '📍',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+          })
+        }).addTo(map);
+      }
+    }
+
+    function makeEditable(shape) {
+      if (shape.editing && typeof shape.editing.enable === "function") {
+        shape.editing.enable();
+      }
+    }
 
     function getUserLocation(callback) {
       if (navigator.geolocation) {
@@ -110,6 +136,7 @@
           fillColor: shadeOption === "inside" ? "red" : "transparent",
           fillOpacity: 0.35
         }).addTo(map);
+        makeEditable(circle);
         shapes.push(circle);
       });
     };
@@ -126,6 +153,7 @@
           color: "black"
         });
         rect.addTo(map);
+        makeEditable(rect);
         shapes.push(rect);
       });
     };
@@ -162,6 +190,7 @@
           fillOpacity: 0.35,
           color: "black"
         }).addTo(map);
+        makeEditable(rect);
         shapes.push(rect);
       });
     };
@@ -175,6 +204,7 @@
           }
           selectedShape = shape;
           shape.setStyle({ color: "yellow" });
+          showCenterMarker(shape);
         });
       });
     };
@@ -184,6 +214,10 @@
         map.removeLayer(selectedShape);
         shapes = shapes.filter((s) => s !== selectedShape);
         selectedShape = null;
+        if (centerMarker) {
+          map.removeLayer(centerMarker);
+          centerMarker = null;
+        }
       } else {
         alert("No shape selected.");
       }
@@ -193,6 +227,10 @@
       shapes.forEach((shape) => map.removeLayer(shape));
       shapes = [];
       selectedShape = null;
+      if (centerMarker) {
+        map.removeLayer(centerMarker);
+        centerMarker = null;
+      }
     };
 
     document.getElementById("toggleShading").onclick = (e) => {
@@ -241,6 +279,7 @@
         fillColor: shadeOption === "inside" ? "red" : "transparent",
         fillOpacity: 0.35
       }).addTo(map);
+      makeEditable(circle);
       shapes.push(circle);
     };
 
@@ -262,6 +301,7 @@
         fillOpacity: 0.35,
         color: "black"
       }).addTo(map);
+      makeEditable(rect);
       shapes.push(rect);
     };
   </script>
