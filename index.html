@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
+html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -37,6 +36,13 @@
       font-size: 16px;
       text-align: center;
     }
+    .dimension-label {
+      background-color: white;
+      padding: 2px 4px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -69,6 +75,7 @@
     let searchCoords = null;
     let centerMarker = null;
     let isLocked = false;
+    let dimensionLabels = [];
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
@@ -89,9 +96,43 @@
       }
     }
 
+    function showDimensionLabel(shape) {
+      clearDimensionLabels();
+      let label;
+      if (shape instanceof L.Circle) {
+        const radiusMiles = shape.getRadius() / 1609.34;
+        label = L.marker(shape.getLatLng(), {
+          icon: L.divIcon({ className: 'dimension-label', html: `Radius: ${radiusMiles.toFixed(2)} mi` })
+        }).addTo(map);
+      } else if (shape instanceof L.Rectangle) {
+        const bounds = shape.getBounds();
+        const nw = bounds.getNorthWest();
+        const se = bounds.getSouthEast();
+        const widthMiles = Math.abs(nw.lng - se.lng) * 69;
+        const heightMiles = Math.abs(nw.lat - se.lat) * 69;
+        const center = bounds.getCenter();
+        label = L.marker(center, {
+          icon: L.divIcon({ className: 'dimension-label', html: `${widthMiles.toFixed(2)} mi × ${heightMiles.toFixed(2)} mi` })
+        }).addTo(map);
+      }
+      if (label) dimensionLabels.push(label);
+    }
+
+    function clearDimensionLabels() {
+      dimensionLabels.forEach(label => map.removeLayer(label));
+      dimensionLabels = [];
+    }
+
+    function updateDimensionOnEdit(shape) {
+      shape.on('edit', () => showDimensionLabel(shape));
+      shape.on('drag', () => showDimensionLabel(shape));
+    }
+
     function makeEditable(shape) {
       if (!isLocked && shape.editing && typeof shape.editing.enable === "function") {
         shape.editing.enable();
+        updateDimensionOnEdit(shape);
+        showDimensionLabel(shape);
       }
     }
 
@@ -115,6 +156,7 @@
       selectedShape = null;
       if (centerMarker) map.removeLayer(centerMarker);
       centerMarker = null;
+      clearDimensionLabels();
     };
 
     document.getElementById("deleteSelectedShape").onclick = () => {
@@ -124,6 +166,7 @@
         selectedShape = null;
         if (centerMarker) map.removeLayer(centerMarker);
         centerMarker = null;
+        clearDimensionLabels();
       } else alert("No shape selected.");
     };
 
@@ -193,6 +236,7 @@
           selectedShape = shape;
           shape.setStyle({ color: "yellow" });
           showCenterMarker(shape);
+          showDimensionLabel(shape);
         });
       });
     };
